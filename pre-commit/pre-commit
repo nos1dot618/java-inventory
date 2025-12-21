@@ -1,0 +1,112 @@
+#!/bin/sh
+
+RED=$(tput setaf 1)
+GREEN=$(tput setaf 2)
+YELLOW=$(tput setaf 3)
+BLUE=$(tput setaf 4)
+GREY=$(tput setaf 8)
+RESET=$(tput sgr0)
+
+log() {
+    local color="$1"
+    local message="$2"
+    if [ -t 1 ]; then
+        echo -e "${color}${message}${RESET}"
+    else
+        echo "$message"
+    fi
+}
+
+info() { 
+    log "$BLUE" "INFO: $*"; 
+}
+
+warn() { 
+    log "$YELLOW" "WARN: $*"; 
+}
+
+error() { 
+    log "$RED" "ERROR: $*";
+}
+
+success() { 
+    log "$GREEN" "INFO: $*";
+}
+
+notice() {
+    log "$GREY" "NOTICE: $*";
+}
+
+notice "This is a git pre-commit hook created by github.com/nos1dot618."
+notice "It is open-sourced under the MIT License."
+notice "It only shows warnings for the portions changed in the commit, not the entire file."
+notice "Source-Code available at: <https://github.com/nos1dot618/git-hook-java.git>"
+
+info "Running checkstyle."
+
+CHECKSTYLE_JAR=".checkstyle/checkstyle-12.3.0-all.jar"
+CHECKSTYLE_CONFIG=".checkstyle/style_guide.xml"
+REPO_ROOT=$(git rev-parse --show-toplevel)
+
+MODIFIED_FILES=$(git diff --cached --name-only --diff-filter=ACM | grep "\.java$")
+[ -z "$MODIFIED_FILES" ] && exit 0
+
+WARN_COUNT=0
+ERROR_COUNT=0
+
+for FILE in $MODIFIED_FILES; do
+    # Relative path for nicer logging
+    info "Checking '$FILE'."
+
+    # Get changed line numbers
+    CHANGED_LINES=$(git diff --cached -U0 -- "$FILE" |
+        grep '^@@' |
+        sed -E 's/.*\+([0-9]+)(,([0-9]+))?.*/\1 \3/' |
+        awk '{ start=$1; count=($2==""?1:$2); for(i=0;i<count;i++) print start+i }')
+    [ -z "$CHANGED_LINES" ] && continue
+
+    # Run checkstyle
+    OUTPUT=$(java -jar "$CHECKSTYLE_JAR" -c "$CHECKSTYLE_CONFIG" "$FILE" 2>&1)
+    EXITCODE=$?
+
+    if [ $EXITCODE -ne 0 ]; then
+        # Parser / Execution failure
+        error "Checkstyle failed to analyze this file; possibly due to syntax or parse errors."
+        echo "$OUTPUT" | while IFS= read -r LINE; do
+            error "$LINE"
+        done
+        ERROR_COUNT=$((ERROR_COUNT + 1))
+        continue
+    fi
+
+    while IFS= read -r LINE; do
+        case "$LINE" in
+        *"$FILE":*)
+            # Extract row & column
+            ROW=$(echo "$LINE" | sed -E "s#.*$FILE:([0-9]+):([0-9]+):.*#\1#")
+            COL=$(echo "$LINE" | sed -E "s#.*$FILE:([0-9]+):([0-9]+):.*#\2#")
+
+            for CL in $CHANGED_LINES; do
+                if [ "$ROW" = "$CL" ]; then
+                    # Strip full path + row/col from message
+                    MESSAGE=$(echo "$LINE" | sed -E "s#.*$FILE:[0-9]+:[0-9]+: ##; s/\[WARN\] //")
+
+                    if echo "$LINE" | grep -q "\[WARN\]"; then
+                        warn "$FILE:$ROW:$COL: $MESSAGE"
+                        WARN_COUNT=$((WARN_COUNT + 1))
+                    else
+                        error "$FILE:$ROW:$COL: $MESSAGE"
+                        ERROR_COUNT=$((ERROR_COUNT + 1))
+                    fi
+                fi
+            done
+            ;;
+        esac
+    done <<< "$OUTPUT"
+done
+
+if [ -t 1 ]; then
+    echo -e "${BLUE}INFO: Checkstyle summary: ${RED}$ERROR_COUNT error(s)${BLUE}, ${YELLOW}$WARN_COUNT warning(s)${BLUE}.${RESET}"
+else
+    echo -e "INFO: Checkstyle summary: $ERROR_COUNT error(s), $WARN_COUNT warning(s)."
+fi
