@@ -1,14 +1,14 @@
 > Java Dev-Tools
 ---
 
-## 1. Static-Analyzer for finding missing unit-tests in java-module
+## 1. Static-Analyzer for unit-test-coverage
 
 ### Getting Started
 
 ```powershell
 .\SETUP.ps1
-python missing_unit_tests.py
-start .\build\missing_unit_test_report.html
+python test_coverage.py
+start .\build\test_coverage_report.html
 ```
 
 ## 2. Git-Pre-Commit-Hook

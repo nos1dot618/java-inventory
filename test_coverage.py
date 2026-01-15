@@ -57,14 +57,14 @@ def collectMethods(output: str):
 def generateHtmlReport(
     missingTests: dict,
     sourceMethods: dict,
-    outputFile: str = "./build/missing_unit_test_report.html",
+    outputFile: str = "./build/test_coverage_report.html",
 ):
     html = f"""
 <!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Unit-Test Report</title>
+<title>Test-Coverage Report</title>
 <style>
     body {{
         font-family: Arial, sans-serif;
@@ -96,7 +96,7 @@ function toggleRow(id) {{
 </head>
 <body>
 
-<h1>Unit-Test Report</h1>
+<h1>Test-Coverage Report</h1>
 <p>Total classes analyzed: {len(sourceMethods)}</p>
 
 <table>
@@ -138,14 +138,14 @@ function toggleRow(id) {{
 """
 
         if missingCount > 0:
-            html += "<b>Missing methods:</b><ul>"
+            html += "<b>Unit-Test-Methods missing in the Test-Class:</b><ul>"
             for method in missingTestEntry[MISSING_METHODS_KEY]:
                 html += f"<li>{method}</li>"
             html += "</ul>"
         else:
-            html += "<b>Missing methods:</b> None<br>"
+            html += "<b>No unit-test-methods missing in the Test-Class.</b><br>"
 
-        html += "<b>Present methods:</b><ul>"
+        html += "<b>Methods present in Original-Class:</b><ul>"
         for method in sorted(sourceMethods[(classPath, className)]):
             html += f"<li>{method}</li>"
         html += "</ul></td></tr>"
@@ -161,7 +161,7 @@ function toggleRow(id) {{
 
 if __name__ == "__main__":
     if len(sys.argv) != 3:
-        error("Usage: python missing_unit_tests.py <sourceDir> <testDir>.")
+        error("Usage: python test_coverage.py <sourceDir> <testDir>.")
         sys.exit(1)
 
     sourceDir = Path(sys.argv[1])
