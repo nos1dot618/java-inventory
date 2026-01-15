@@ -8,39 +8,41 @@ GREY=$(tput setaf 8)
 RESET=$(tput sgr0)
 
 log() {
-    local color="$1"
-    local message="$2"
+    local level="$1"
+    local color="$2"
+    local message="$3"
+    # Test whether stdout is connected to TTY.
     if [ -t 1 ]; then
-        echo -e "${color}${message}${RESET}"
+        echo -e "[${color}${level}${RESET}] $message"
     else
-        echo "$message"
+        echo "[$level] $message"
     fi
 }
 
 info() { 
-    log "$BLUE" "INFO: $*"; 
+    log "INFO" "$BLUE" "$*"; 
 }
 
 warn() { 
-    log "$YELLOW" "WARN: $*"; 
+    log "WARNING" "$YELLOW" "$*"; 
 }
 
 error() { 
-    log "$RED" "ERROR: $*";
+    log "ERROR" "$RED" "$*";
 }
 
 success() { 
-    log "$GREEN" "INFO: $*";
-}
+    log "INFO" "$GREEN" "$*";
+} 
 
 notice() {
-    log "$GREY" "NOTICE: $*";
+    log "NOTICE" "$GREY" "$*";
 }
 
 notice "This is a git pre-commit hook created by github.com/nos1dot618."
 notice "It is open-sourced under the MIT License."
 notice "It only shows warnings for the portions changed in the commit, not the entire file."
-notice "Source-Code available at: <https://github.com/nos1dot618/git-hook-java.git>"
+notice "Source-Code available at: <https://github.com/nos1dot618/java-dev-tools.git>"
 
 info "Running checkstyle."
 
@@ -106,7 +108,7 @@ for FILE in $MODIFIED_FILES; do
 done
 
 if [ -t 1 ]; then
-    echo -e "${BLUE}INFO: Checkstyle summary: ${RED}$ERROR_COUNT error(s)${BLUE}, ${YELLOW}$WARN_COUNT warning(s)${BLUE}.${RESET}"
+    echo -e "[${BLUE}INFO${RESET}] Checkstyle summary: ${RED}$ERROR_COUNT error(s)${BLUE}, ${YELLOW}$WARN_COUNT warning(s)${BLUE}.${RESET}"
 else
-    echo -e "INFO: Checkstyle summary: $ERROR_COUNT error(s), $WARN_COUNT warning(s)."
+    echo -e "[INFO] Checkstyle summary: $ERROR_COUNT error(s), $WARN_COUNT warning(s)."
 fi

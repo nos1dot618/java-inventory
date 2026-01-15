@@ -9,7 +9,7 @@
 Navigate to your project, then run the following:
 
 ```powershell
-irm https://raw.githubusercontent.com/nos1dot618/git-hook-java/refs/heads/master/SETUP.ps1 | iex
+.\pre-commit\SETUP.ps1 -SetupPath <path/to/your/repository>
 ```
 
 ## About

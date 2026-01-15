@@ -1,2 +1,0 @@
-- Update pre-commit setup-script.
-- Update README.
