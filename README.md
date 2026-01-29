@@ -7,7 +7,7 @@
 
 ```powershell
 .\SETUP.ps1
-python test_coverage.py
+python test_coverage.py .\dev-test\src\main\ .\dev-test\src\test\
 start .\build\test_coverage_report.html
 ```
 
