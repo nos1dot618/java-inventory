@@ -1,47 +1,16 @@
-import subprocess
 import re
 from collections import defaultdict
-from pathlib import Path
-import sys
+
+from commons import *
 
 METHOD_RE = re.compile(
-    r"\[DEBUG\]\s+\[Method Inventory Check\]\s+"
+    r"\[DEBUG]\s+\[Method Inventory Check]\s+"
     r"([A-Za-z0-9_]+)\s+([A-Za-z0-9_$.]+)\s+([A-Za-z0-9_]+)"
 )
 
 MISSING_CLASS_KEY = "missingClass"
 MISSING_METHODS_KEY = "missingMethods"
-
-
-def error(message):
-    print(f"[\033[31mERROR\033[0m] {message}")
-
-
-def info(message):
-    print(f"[\033[34mINFO\033[0m] {message}")
-
-
-def testDirPath(path: str):
-    if not path.exists():
-        error(f"'{path}' does not exist.")
-        sys.exit(1)
-    if not path.is_dir():
-        error(f"'{path}' is not a directory.")
-        sys.exit(1)
-
-
-def runCheckstyleMethodInventoryCheck(targetDir: Path) -> str:
-    cmd = [
-        "java",
-        "-cp",
-        "resources/checkstyle-12.3.0-all.jar;build/MethodInventoryCheck.jar",
-        "com.puppycrawl.tools.checkstyle.Main",
-        "-c",
-        "./resources/method_inventory_check_config.xml",
-        str(targetDir),
-    ]
-    proc = subprocess.run(cmd, capture_output=True, text=True)
-    return proc.stdout
+CONFIG_NAME = "method_inventory_check_config"
 
 
 def collectMethods(output: str):
@@ -55,9 +24,9 @@ def collectMethods(output: str):
 
 
 def generateHtmlReport(
-    missingTests: dict,
-    sourceMethods: dict,
-    outputFile: str = "./build/test_coverage_report.html",
+        missingTests: dict,
+        sourceMethods: dict,
+        outputFile: str = "./build/test_coverage_report.html",
 ):
     html = f"""
 <!DOCTYPE html>
@@ -170,8 +139,8 @@ if __name__ == "__main__":
     testDirPath(sourceDir)
     testDirPath(testDir)
 
-    sourceOutput = runCheckstyleMethodInventoryCheck(sourceDir)
-    testOutput = runCheckstyleMethodInventoryCheck(testDir)
+    sourceOutput = runCheckstyleCheck(CONFIG_NAME, sourceDir)
+    testOutput = runCheckstyleCheck(CONFIG_NAME, testDir)
 
     sourceMethods = collectMethods(sourceOutput)
     testMethods = collectMethods(testOutput)
