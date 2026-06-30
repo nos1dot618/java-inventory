@@ -19,30 +19,30 @@ log() {
     fi
 }
 
-info() { 
-    log "INFO" "$BLUE" "$*"; 
+info() {
+    log "INFO" "$BLUE" "$*";
 }
 
-warn() { 
-    log "WARNING" "$YELLOW" "$*"; 
+warn() {
+    log "WARNING" "$YELLOW" "$*";
 }
 
-error() { 
+error() {
     log "ERROR" "$RED" "$*";
 }
 
-success() { 
+success() {
     log "INFO" "$GREEN" "$*";
-} 
+}
 
 notice() {
     log "NOTICE" "$GREY" "$*";
 }
 
-notice "This is a git pre-commit hook created by github.com/nos1dot618."
+notice "This is a git pre-commit hook created by gitlab.com/ninthcircle."
 notice "It is open-sourced under the MIT License."
 notice "It only shows warnings for the portions changed in the commit, not the entire file."
-notice "Source-Code available at: <https://github.com/nos1dot618/java-dev-tools.git>"
+notice "Source-Code available at: <https://gitlab.com/ninthcircle/java-dev-tools.git>"
 
 info "Running checkstyle."
 

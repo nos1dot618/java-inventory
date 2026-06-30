@@ -12,7 +12,7 @@ public class Baz {
         // TODO: implement
         return 0.0;
     }
-    
+
     public double create(double x, double y) {
         // TODO: implement
         return 0.0;

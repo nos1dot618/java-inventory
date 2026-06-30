@@ -9,7 +9,7 @@
 Navigate to your project, then run the following:
 
 ```powershell
-.\pre-commit\SETUP.ps1 -SetupPath <path/to/your/repository>
+.\pre-commit\Initialize.ps1 -Path <path/to/your/repository>
 ```
 
 ## About

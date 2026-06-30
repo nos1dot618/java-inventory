@@ -9,12 +9,14 @@ import com.puppycrawl.tools.checkstyle.api.TokenTypes;
 public class RestApiInventoryCheck extends AbstractCheck {
 
     private String currentPath = "";
+    private String currentClass;
 
     @Override
     public void visitToken(DetailAST detailAST) {
         switch (detailAST.getType()) {
             case TokenTypes.CLASS_DEF: {
                 currentPath = extractPath(detailAST);
+                currentClass = Objects.requireNonNull(detailAST.findFirstToken(TokenTypes.IDENT)).getText();
                 break;
             }
             case TokenTypes.METHOD_DEF: {
@@ -71,7 +73,8 @@ public class RestApiInventoryCheck extends AbstractCheck {
     }
 
     private String getAnnotationSummary(DetailAST detailAST) {
-        for (DetailAST child = detailAST.findFirstToken(TokenTypes.ANNOTATION_MEMBER_VALUE_PAIR); child != null; child = child.getNextSibling()) {
+        for (DetailAST child = detailAST.findFirstToken(TokenTypes.ANNOTATION_MEMBER_VALUE_PAIR);
+             child != null; child = child.getNextSibling()) {
             DetailAST identifier = child.findFirstToken(TokenTypes.IDENT);
             if (identifier == null) {
                 continue;
@@ -117,7 +120,8 @@ public class RestApiInventoryCheck extends AbstractCheck {
             }
         }
         if (httpMethod != null && !endpoint.isEmpty()) {
-            System.out.printf("[DEBUG] [REST-API Inventory Check] %s %s \"%s\"%n", httpMethod, endpoint, summary);
+            System.out.printf("[DEBUG] [REST-API Inventory Check] %s %s %s \"%s\"%n", currentClass, httpMethod,
+                    endpoint, summary);
         }
     }
 

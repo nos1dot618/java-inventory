@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<classpath>
+	<classpathentry kind="con" path="org.eclipse.jdt.launching.JRE_CONTAINER"/>
+	<classpathentry kind="src" path="dev-test/src/main/java"/>
+	<classpathentry kind="src" path="dev-test/src/test/java"/>
+	<classpathentry kind="src" path="src/main/java"/>
+	<classpathentry kind="lib" path="resources/checkstyle-12.3.0-all.jar"/>
+	<classpathentry kind="output" path="bin"/>
+</classpath>
