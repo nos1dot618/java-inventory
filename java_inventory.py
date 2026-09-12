@@ -24,6 +24,7 @@ CHECKSTYLE_JAR = RESOURCES_DIR / "checkstyle-12.3.0-all.jar"
 CHECKS_JAR = BUILD_DIR / "java-inventory-checkstyle-checks.jar"
 CONFIGS_DIR = RESOURCES_DIR / "configs"
 PACKAGE_CONFIG = RESOURCES_DIR / "checkstyle_packages.xml"
+CHECKSTYLE_STYLE_GUIDE = RESOURCES_DIR / "style_guide.xml"
 
 METHOD_CONFIG = CONFIGS_DIR / "method_inventory_check_config.xml"
 REST_API_CONFIG = CONFIGS_DIR / "rest_api_inventory_check_config.xml"
@@ -53,9 +54,10 @@ def color_enabled():
 
 
 USE_COLOR = color_enabled()
+DEBUG = False
 
 
-def log(level: str, message: str):
+def colored(level: str) -> str:
     colors = {
         "info": Colors.BLUE,
         "error": Colors.RED,
@@ -63,33 +65,39 @@ def log(level: str, message: str):
         "warning": Colors.YELLOW,
     }
 
-    label = level
     if USE_COLOR:
-        label = f"{colors.get(level, '')}{level}{Colors.RESET}"
-    print(f"{label}: {message}")
+        return f"{colors.get(level, '')}{level}{Colors.RESET}"
+
+    return level
 
 
-def info(message: str):
-    log("info", message)
+def log(level: str, message: str, **kwargs):
+    force = kwargs.get("force", False)
+
+    if not DEBUG and not force:
+        return
+
+    print(f"{colored(level)}: {message}")
 
 
-def error(message: str):
-    log("error", message)
+def info(message: str, **kwargs):
+    log("info", message, **kwargs)
 
 
-def success(message: str):
-    log("success", message)
+def error(message: str, **kwargs):
+    log("error", message, **kwargs)
 
 
-def warning(message: str):
-    log("warning", message)
+def success(message: str, **kwargs):
+    log("success", message, **kwargs)
+
+
+def warning(message: str, **kwargs):
+    log("warning", message, **kwargs)
 
 
 def run(
-    command: list[str],
-    *,
-    cwd: Path = ROOT,
-    capture_output: bool = False,
+    command: list[str], *, cwd: Path = ROOT, capture_output: bool = False, check=True
 ) -> subprocess.CompletedProcess[str]:
     formatted = " ".join(shlex.quote(str(arg)) for arg in command)
     info(f"running: {formatted}")
@@ -98,7 +106,7 @@ def run(
         return subprocess.run(
             command,
             cwd=cwd,
-            check=True,
+            check=check,
             text=True,
             capture_output=capture_output,
         )
@@ -497,6 +505,234 @@ def generate_test_coverage_report(
     )
 
 
+def run_git(*args: str, cwd: Path = ROOT) -> str:
+    result = run(
+        ["git", *args],
+        cwd=cwd,
+        capture_output=True,
+    )
+    return result.stdout
+
+
+# pylint: disable=too-many-branches
+def get_changed_lines(
+    git_dir: Path,
+    cached: bool = False,
+    include_untracked: bool = False,
+):
+    """Return changed Java files/lines as (filepath, line_or_none) tuples.
+
+    A line number identifies a changed line in a modified file. None identifies
+    an added file, for which the entire file should be analyzed.
+    """
+    diff_commands = [["diff", "--unified=0", "--no-color"]]
+    if cached:
+        diff_commands.append(["diff", "--cached", "--unified=0", "--no-color"])
+
+    changed = []
+    file = None
+    added_file = False
+
+    for diff_command in diff_commands:
+        diff = run_git(*diff_command, cwd=git_dir)
+        for line in diff.splitlines():
+            if line.startswith("diff --git "):
+                file = None
+                added_file = False
+
+            elif line.startswith("--- /dev/null"):
+                added_file = True
+
+            elif line.startswith("+++ b/"):
+                file = line[6:]
+
+                if added_file:
+                    changed.append((file, None))
+
+            elif line.startswith("@@") and file and not added_file:
+                match = re.search(r"\+(\d+)(?:,(\d+))?", line)
+                if not match:
+                    continue
+
+                start = int(match.group(1))
+                count = int(match.group(2) or 1)
+
+                for line_no in range(start, start + count):
+                    changed.append((file, line_no))
+
+    if include_untracked:
+        for file in run_git(
+            "ls-files",
+            "--others",
+            "--exclude-standard",
+            cwd=git_dir,
+        ).splitlines():
+            if file:
+                changed.append((file, None))
+
+    return changed
+
+
+def run_checkstyle_file(file: Path):
+    """Run Checkstyle for one Java file and return (output, exit_code)."""
+    ensure_checks_jar()
+
+    require_file(CHECKSTYLE_STYLE_GUIDE, "Checkstyle configuration")
+    require_file(file, "Java source file")
+
+    result = run(
+        [
+            "java",
+            "-cp",
+            classpath(),
+            "com.puppycrawl.tools.checkstyle.Main",
+            "-c",
+            str(CHECKSTYLE_STYLE_GUIDE),
+            str(file),
+        ],
+        capture_output=True,
+        check=False,
+    )
+
+    return result.stdout + result.stderr, result.returncode
+
+
+def parse_checkstyle_violation(line: str):
+    """Return (file, line, column, severity, message) for a Checkstyle line."""
+    match = re.match(
+        r"^\[(WARN|ERROR)\]\s+(.*):(\d+):(\d+):\s*(.*)$",
+        line,
+    )
+    if not match:
+        return None
+
+    severity, file, row, column, message = match.groups()
+
+    return (
+        file,
+        int(row),
+        int(column),
+        "warning" if severity == "WARN" else "error",
+        message,
+    )
+
+
+def parse_checkstyle_exception(output: str):
+    """Return the deepest Checkstyle exception with a message."""
+    exceptions = re.findall(
+        r"Caused by:\s+([\w.$]+)(?::\s+(.*))?",
+        output,
+    )
+
+    for exception, message in reversed(exceptions):
+        if message:
+            return exception, message
+
+    return None
+
+
+# pylint: disable=too-many-locals
+def subcommand_changed_lines(
+    git_dir: Path,
+    cached: bool,
+    include_untracked: bool,
+    run_checkstyle: bool,  # pylint: disable=redefined-outer-name
+):
+    """Show changed Java lines, optionally filtered through Checkstyle."""
+    changed = get_changed_lines(
+        git_dir=git_dir,
+        cached=cached,
+        include_untracked=include_untracked,
+    )
+
+    if not run_checkstyle:
+        for file, line_no in changed:
+            if line_no is None:
+                print(file)
+            else:
+                print(f"{file}:{line_no}")
+        return
+
+    changed_by_file = defaultdict(set)
+    whole_files = set()
+
+    for file, line_no in changed:
+        if line_no is None:
+            whole_files.add(file)
+        else:
+            changed_by_file[file].add(line_no)
+
+    warn_count = 0
+    error_count = 0
+    diagnostics = []
+
+    for file in sorted(set(changed_by_file) | whole_files):
+        source_file = git_dir / file
+
+        if not source_file.is_file():
+            continue
+
+        if source_file.suffix.lower() != ".java":
+            warning(f"ignoring '{source_file}'")
+            continue
+
+        output, exit_code = run_checkstyle_file(source_file)
+
+        violations = []
+        for line in output.splitlines():
+            violation = parse_checkstyle_violation(line)
+            if violation:
+                violations.append(violation)
+
+        if exit_code != 0 and not violations:
+            exception = parse_checkstyle_exception(output)
+
+            if exception:
+                exception_name, message = exception
+                diagnostics.append(
+                    f"{colored('error')}: {file}: {exception_name}: {message}"
+                )
+            else:
+                diagnostics.append(
+                    f"{colored('error')}: {file}: Checkstyle failed to analyze the file."
+                )
+
+            error_count += 1
+            continue
+
+        for violation_file, row, column, severity, message in violations:
+            # Checkstyle may report an absolute path while the diff uses a
+            # repository-relative path.
+            try:
+                reported_file = (
+                    Path(violation_file)
+                    .resolve()
+                    .relative_to(git_dir.resolve())
+                    .as_posix()
+                )
+            except ValueError:
+                reported_file = Path(violation_file).as_posix()
+
+            if reported_file != file:
+                continue
+
+            if file not in whole_files and row not in changed_by_file[file]:
+                continue
+
+            diagnostics.append(f"{colored(severity)}: {file}:{row}:{column}: {message}")
+
+            if severity == "warning":
+                warn_count += 1
+            else:
+                error_count += 1
+
+    print("\n".join(diagnostics))
+    info(
+        f"checkstyle summary: {error_count} error(s), {warn_count} warning(s).",
+        force=True,
+    )
+
+
 def subcommand_setup():
     require_command("git")
 
@@ -561,9 +797,17 @@ def subcommand_test_coverage(
 
 
 def main():
+    global DEBUG  # pylint: disable=global-statement
+
     parser = argparse.ArgumentParser(
-        prog="toolchain.py",
+        prog="java_inventory.py",
         description="Java inventory and test-coverage development tool",
+    )
+
+    parser.add_argument(
+        "--debug",
+        action="store_true",
+        help="show debug logs",
     )
 
     subparsers = parser.add_subparsers(
@@ -579,6 +823,35 @@ def main():
     subparsers.add_parser(
         "build",
         help="compile and package custom Checkstyle checks",
+    )
+
+    changed_lines_parser = subparsers.add_parser(
+        "lint",
+        help="run Checkstyle on changed Java lines",
+    )
+
+    changed_lines_parser.add_argument(
+        "git_dir",
+        type=Path,
+        help="Git repository directory",
+    )
+
+    changed_lines_parser.add_argument(
+        "--cached",
+        action="store_true",
+        help="analyze staged changes instead of unstaged working-tree changes",
+    )
+
+    changed_lines_parser.add_argument(
+        "--include-untracked",
+        action="store_true",
+        help="include untracked Java files as whole-file changes",
+    )
+
+    changed_lines_parser.add_argument(
+        "--no-checkstyle",
+        action="store_true",
+        help="only show changed Java files and lines without running Checkstyle",
     )
 
     method_parser = subparsers.add_parser(
@@ -645,12 +918,22 @@ def main():
 
     args = parser.parse_args()
 
+    DEBUG = args.debug
+
     match args.command:
         case "setup":
             subcommand_setup()
 
         case "build":
             subcommand_build()
+
+        case "lint":
+            subcommand_changed_lines(
+                git_dir=args.git_dir.resolve(),
+                cached=args.cached,
+                include_untracked=args.include_untracked,
+                run_checkstyle=not args.no_checkstyle,
+            )
 
         case "inventory-method":
             subcommand_inventory_method(

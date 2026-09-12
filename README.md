@@ -1,170 +1,298 @@
 # Dev-Tools for Java Projects
 
-A collection of development tools for Java projects, including Checkstyle-based static analysis, unit-test coverage analysis, REST API inventory generation, and a Git pre-commit hook.
+Development tooling for Java projects, including Checkstyle linting, method inventory, REST API inventory, and test-coverage analysis.
 
----
+## Requirements
+
+* Python 3
+* Git
+* JDK (`java`, `javac`, and `jar`)
 
 ## Setup
 
-Clone the repository and initialize its dependencies and Git submodules:
+Initialize the project dependencies and Git submodules:
 
 ```sh
-python toolchain.py setup
+python java_inventory.py setup
 ```
 
 Build the custom Checkstyle checks:
 
 ```sh
-python toolchain.py build
+python java_inventory.py build
 ```
 
-The `build` command compiles the custom Checkstyle checks and generates:
+You should run `setup` and `build` before using the analysis and linting commands.
+
+---
+
+## 1. Changed-Line Java Linter
+
+The `lint` command runs Checkstyle against Java code changed in Git.
+
+For modified files, only violations on changed lines are reported. Newly added files are checked as a whole.
+
+### Basic usage
+
+Check unstaged working-tree changes:
+
+```sh
+python java_inventory.py lint .
+```
+
+Check staged changes:
+
+```sh
+python java_inventory.py lint . --cached
+```
+
+Include untracked Java files:
+
+```sh
+python java_inventory.py lint . --include-untracked
+```
+
+Show the changed Java files and lines without running Checkstyle:
+
+```sh
+python java_inventory.py lint . --no-checkstyle
+```
+
+Enable debug logging:
+
+```sh
+python java_inventory.py --debug lint .
+```
+
+### How changes are handled
+
+| Change                                         | Lint behavior                          |
+| ---------------------------------------------- | -------------------------------------- |
+| Modified Java file                             | Check only violations on changed lines |
+| Added Java file                                | Check the entire file                  |
+| Untracked Java file with `--include-untracked` | Check the entire file                  |
+| Non-Java file                                  | Ignored                                |
+
+For example:
 
 ```text
-build/
-└── CheckstyleChecks.jar
+warning: src/main/java/example/Foo.java:15:5: Missing a Javadoc comment. [MissingJavadocMethod]
+warning: src/main/java/example/Foo.java:17:5: 'isValid' has incorrect indentation level 4, expected level should be 12. [Indentation]
+error: src/main/java/example/Bar.java:8:48: java.lang.IllegalStateException: mismatched input '{' expecting ')'
+
+info: checkstyle summary: 1 error(s), 2 warning(s).
 ```
 
-Run `setup` once after cloning the repository. Run `build` whenever the custom Checkstyle checks change.
+### Lint options
 
-### Requirements
+| Option                | Description                                                     |
+| --------------------- | --------------------------------------------------------------- |
+| `--cached`            | Analyze staged changes instead of unstaged working-tree changes |
+| `--include-untracked` | Include untracked Java files and check them as whole files      |
+| `--no-checkstyle`     | Print changed Java files and lines without running Checkstyle   |
+| `--debug`             | Show internal commands and debug logging                        |
 
-The following tools must be available on `PATH`:
-
-* Python 3
-* Git
-* Java Development Kit (JDK)
-
-  * `java`
-  * `javac`
-  * `jar`
-
----
-
-## 1. Static Analyzer for Unit-Test Coverage
-
-Analyzes Java source classes and their corresponding test classes to identify missing unit tests.
-
-### Usage
+`--debug` is a global option and must appear **before** the subcommand:
 
 ```sh
-python toolchain.py test-coverage \
-    dev-test/src/main \
-    dev-test/src/test
+python java_inventory.py --debug lint .
 ```
 
-The report is generated at:
+### Using lint as a Git pre-commit hook
 
-```text
-build/test_coverage_report.html
-```
+For a normal Git hook, lint the staged snapshot:
 
-Open the generated report with your system's default browser:
+Create `.git/hooks/pre-commit`:
 
 ```sh
-xdg-open build/test_coverage_report.html
+#!/bin/sh
+python java_inventory.py lint . --cached
 ```
 
-On macOS:
+Make it executable:
 
 ```sh
-open build/test_coverage_report.html
+chmod +x .git/hooks/pre-commit
 ```
 
-The report shows:
+The `--cached` flag is important because a commit contains the staged version of the files, not arbitrary unstaged working-tree changes.
 
-* Total classes analyzed
-* Classes missing a corresponding test class
-* Missing test methods
-* Methods found in the original source class
-
----
-
-## 2. Git Pre-Commit Hook
-
-The pre-commit hook checks Java files changed in a commit for formatting and compilation issues.
-
-It uses [Checkstyle](https://github.com/checkstyle/checkstyle/) for Java linting.
-
-See [`pre-commit/`](./pre-commit) for more information.
-
-### Getting Started
-
-Initialize the pre-commit hook for your repository:
+To bypass the hook for a commit:
 
 ```sh
-./pre-commit/Initialize.ps1 -Path <path/to/your/repository>
+git commit --no-verify
 ```
 
 ---
 
-## 3. Static Analyzer for REST APIs
+## 2. Using `pre-commit`
 
-Scans Java source code for REST API endpoints built using `javax.ws.rs` and generates a CSV inventory.
+The same `lint` command can be integrated with the Python [`pre-commit`](https://pre-commit.com/) framework.
 
-### Usage
+Install `pre-commit`:
 
 ```sh
-python toolchain.py inventory-rest-api dev-test/src/main
+python -m pip install pre-commit
 ```
 
-The report is generated at:
+Add the following to `.pre-commit-config.yaml`:
+
+```yaml
+repos:
+  - repo: local
+    hooks:
+      - id: java-inventory-lint
+        name: Java Inventory Checkstyle
+        entry: python java_inventory.py lint . --cached
+        language: unsupported
+        pass_filenames: false
+        always_run: true
+```
+
+Install the Git hook:
+
+```sh
+pre-commit install
+```
+
+Or install the hook and its environments:
+
+```sh
+pre-commit install --install-hooks
+```
+
+Run the lint hook manually:
+
+```sh
+pre-commit run java-inventory-lint
+```
+
+Run it against all files known to `pre-commit`:
+
+```sh
+pre-commit run java-inventory-lint --all-files
+```
+
+The hook uses `pass_filenames: false` because `java_inventory.py` determines the changed files itself from Git.
+
+---
+
+## 3. Java Method Inventory
+
+Generate an inventory of Java methods:
+
+```sh
+python java_inventory.py inventory-method dev-test/src/main
+```
+
+Write the inventory to a specific file:
+
+```sh
+python java_inventory.py inventory-method dev-test/src/main \
+    --output build/methods.csv
+```
+
+---
+
+## 4. REST API Inventory
+
+Generate a CSV inventory of REST APIs:
+
+```sh
+python java_inventory.py inventory-rest-api dev-test/src/main
+```
+
+By default, the report is written to:
 
 ```text
 build/rest_apis.csv
 ```
 
-The CSV contains:
-
-| Column        | Description                          |
-| ------------- | ------------------------------------ |
-| `method`      | HTTP method, such as `GET` or `POST` |
-| `endpoint`    | REST API endpoint                    |
-| `description` | Endpoint description                 |
-
-A custom output path can be specified with `-o`:
+Specify a different output file:
 
 ```sh
-python toolchain.py inventory-rest-api \
-    dev-test/src/main \
-    -o build/my-rest-apis.csv
+python java_inventory.py inventory-rest-api dev-test/src/main \
+    --output build/rest_apis.csv
 ```
 
 ---
 
-## Other Commands
+## 5. Test Coverage Analysis
 
-Generate a method inventory for a Java source tree:
-
-```sh
-python toolchain.py inventory-method dev-test/src/main
-```
-
-Write the method inventory to a file:
+Generate the test-coverage report:
 
 ```sh
-python toolchain.py inventory-method \
+python java_inventory.py test-coverage \
     dev-test/src/main \
-    -o build/methods.txt
+    dev-test/src/test
 ```
 
-Display available commands:
+By default, the report is written to:
 
-```sh
-python toolchain.py --help
+```text
+build/test_coverage_report.html
 ```
 
-Command-specific help:
+Specify a different output file:
 
 ```sh
-python toolchain.py test-coverage --help
-python toolchain.py inventory-rest-api --help
-python toolchain.py inventory-method --help
+python java_inventory.py test-coverage \
+    dev-test/src/main \
+    dev-test/src/test \
+    --output build/coverage.html
 ```
 
 ---
 
-## References
+## Command Reference
 
-1. [Checkstyle Documentation](https://checkstyle.org/index.html)
-2. [Checkstyle GitHub Repository](https://github.com/checkstyle/checkstyle/)
+```text
+python tool.py [--debug] <command>
+```
+
+### Commands
+
+| Command              | Purpose                                         |
+| -------------------- | ----------------------------------------------- |
+| `setup`              | Initialize submodules and validate dependencies |
+| `build`              | Build the custom Checkstyle checks              |
+| `lint`               | Run Checkstyle on changed Java code             |
+| `inventory-method`   | Generate a Java method inventory                |
+| `inventory-rest-api` | Generate a REST API inventory CSV               |
+| `test-coverage`      | Generate the test-coverage report               |
+
+Show command help:
+
+```sh
+python java_inventory.py --help
+```
+
+Show help for a specific command:
+
+```sh
+python java_inventory.py lint --help
+```
+
+```sh
+python java_inventory.py inventory-method --help
+```
+
+```sh
+python java_inventory.py inventory-rest-api --help
+```
+
+```sh
+python java_inventory.py test-coverage --help
+```
+
+## Checkstyle
+
+The linter uses the project's Checkstyle configuration and custom Checkstyle checks:
+
+```text
+resources/style_guide.xml
+resources/checkstyle-12.3.0-all.jar
+build/java-inventory-checkstyle-checks.jar
+```
+
+Run `setup` and `build` first if the Checkstyle dependencies or custom checks have not been built.
