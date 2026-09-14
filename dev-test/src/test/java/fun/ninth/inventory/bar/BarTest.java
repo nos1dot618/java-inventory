@@ -1,4 +1,4 @@
-package fun.ninth.bar;
+package fun.ninth.inventory.bar;
 
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;

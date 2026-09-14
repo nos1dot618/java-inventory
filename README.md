@@ -1,28 +1,23 @@
 # Dev-Tools for Java Projects
 
-Development tooling for Java projects, including Checkstyle linting, method inventory, REST API inventory, and test-coverage analysis.
+Development tooling for Java projects, including Checkstyle linting, Java method and REST API inventories, test-coverage analysis, and Maven dependency inventory.
 
 ## Requirements
 
 * Python 3
 * Git
 * JDK (`java`, `javac`, and `jar`)
+* Maven (`mvn`)
 
 ## Setup
 
-Initialize the project dependencies and Git submodules:
+Initialize the project dependencies and build the inventory components:
 
 ```sh
 python java_inventory.py setup
 ```
 
-Build the custom Checkstyle checks:
-
-```sh
-python java_inventory.py build
-```
-
-You should run `setup` and `build` before using the analysis and linting commands.
+Run `setup` before using the analysis and linting commands.
 
 ---
 
@@ -66,12 +61,12 @@ python java_inventory.py --debug lint .
 
 ### How changes are handled
 
-| Change                                         | Lint behavior                          |
+| Change | Lint behavior |
 | ---------------------------------------------- | -------------------------------------- |
-| Modified Java file                             | Check only violations on changed lines |
-| Added Java file                                | Check the entire file                  |
-| Untracked Java file with `--include-untracked` | Check the entire file                  |
-| Non-Java file                                  | Ignored                                |
+| Modified Java file | Check only violations on changed lines |
+| Added Java file | Check the entire file |
+| Untracked Java file with `--include-untracked` | Check the entire file |
+| Non-Java file | Ignored |
 
 For example:
 
@@ -85,12 +80,12 @@ info: checkstyle summary: 1 error(s), 2 warning(s).
 
 ### Lint options
 
-| Option                | Description                                                     |
+| Option | Description |
 | --------------------- | --------------------------------------------------------------- |
-| `--cached`            | Analyze staged changes instead of unstaged working-tree changes |
-| `--include-untracked` | Include untracked Java files and check them as whole files      |
-| `--no-checkstyle`     | Print changed Java files and lines without running Checkstyle   |
-| `--debug`             | Show internal commands and debug logging                        |
+| `--cached` | Analyze staged changes instead of unstaged working-tree changes |
+| `--include-untracked` | Include untracked Java files and check them as whole files |
+| `--no-checkstyle` | Print changed Java files and lines without running Checkstyle |
+| `--debug` | Show internal commands and debug logging |
 
 `--debug` is a global option and must appear **before** the subcommand:
 
@@ -100,7 +95,7 @@ python java_inventory.py --debug lint .
 
 ### Using lint as a Git pre-commit hook
 
-For a normal Git hook, lint the staged snapshot:
+For a normal Git hook, lint the staged snapshot.
 
 Create `.git/hooks/pre-commit`:
 
@@ -244,22 +239,64 @@ python java_inventory.py test-coverage \
 
 ---
 
+## 6. Maven Dependency Inventory
+
+Generate an inventory of Maven dependencies:
+
+```sh
+python java_inventory.py inventory-dependency path/to/project
+```
+
+The inventory includes:
+
+* Module
+* Group ID
+* Artifact ID
+* Declared version
+* Resolved version
+* Scope
+* Direct/transitive dependency
+* Optional dependency
+
+By default, dependency information is printed to the terminal.
+
+Write a CSV report:
+
+```sh
+python java_inventory.py inventory-dependency path/to/project \
+    --output build/dependencies.csv
+```
+
+Write a JSON report:
+
+```sh
+python java_inventory.py inventory-dependency path/to/project \
+    --output build/dependencies.json \
+    --format json
+```
+
+Maven projects are currently supported. Gradle projects are detected but are not supported yet.
+
+The Maven dependency graph is resolved by the Java Maven resolver. Python handles the CLI integration and report formatting.
+
+---
+
 ## Command Reference
 
 ```text
-python tool.py [--debug] <command>
+python java_inventory.py [--debug] <command>
 ```
 
 ### Commands
 
-| Command              | Purpose                                         |
-| -------------------- | ----------------------------------------------- |
-| `setup`              | Initialize submodules and validate dependencies |
-| `build`              | Build the custom Checkstyle checks              |
-| `lint`               | Run Checkstyle on changed Java code             |
-| `inventory-method`   | Generate a Java method inventory                |
-| `inventory-rest-api` | Generate a REST API inventory CSV               |
-| `test-coverage`      | Generate the test-coverage report               |
+| Command | Purpose |
+| ---------------------- | ------------------------------------------------ |
+| `setup` | Initialize dependencies and build inventory components |
+| `lint` | Run Checkstyle on changed Java code |
+| `inventory-method` | Generate a Java method inventory |
+| `inventory-rest-api` | Generate a REST API inventory CSV |
+| `test-coverage` | Generate the test-coverage report |
+| `inventory-dependency` | Generate a Maven dependency inventory |
 
 Show command help:
 
@@ -285,6 +322,10 @@ python java_inventory.py inventory-rest-api --help
 python java_inventory.py test-coverage --help
 ```
 
+```sh
+python java_inventory.py inventory-dependency --help
+```
+
 ## Checkstyle
 
 The linter uses the project's Checkstyle configuration and custom Checkstyle checks:
@@ -292,7 +333,7 @@ The linter uses the project's Checkstyle configuration and custom Checkstyle che
 ```text
 resources/style_guide.xml
 resources/checkstyle-12.3.0-all.jar
-build/java-inventory-checkstyle-checks.jar
+checkstyle/target/checkstyle-inventory-0.1.0-SNAPSHOT.jar
 ```
 
-Run `setup` and `build` first if the Checkstyle dependencies or custom checks have not been built.
+Run `setup` first if the Checkstyle or Maven inventory components have not been built.

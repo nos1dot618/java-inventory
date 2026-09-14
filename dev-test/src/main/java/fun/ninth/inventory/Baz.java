@@ -1,4 +1,4 @@
-package fun.ninth;
+package fun.ninth.inventory;
 
 public class Baz {
 

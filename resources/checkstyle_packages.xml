@@ -5,5 +5,5 @@
         "https://checkstyle.org/dtds/packages_1_0.dtd">
 
 <checkstyle-packages>
-    <package name="fun.ninth"/>
+    <package name="fun.ninth.inventory.checkstyle"/>
 </checkstyle-packages>

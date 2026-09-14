@@ -1,4 +1,4 @@
-package fun.ninth.bar;
+package fun.ninth.inventory.bar;
 
 public class Bar {
 
