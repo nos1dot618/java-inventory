@@ -1,4 +1,4 @@
-package fun.ninth.rest;
+package fun.ninth.inventory.rest;
 
 @javax.ws.rs.Path("/orders")
 public class OrderResource {

@@ -1,4 +1,4 @@
-package fun.ninth;
+package fun.ninth.inventory.checkstyle;
 
 import java.util.Objects;
 
@@ -47,14 +47,14 @@ public class MethodInventoryCheck extends AbstractCheck {
 
     @Override
     public int[] getDefaultTokens() {
-        return new int[]{TokenTypes.PACKAGE_DEF, TokenTypes.CLASS_DEF, TokenTypes.METHOD_DEF};
+        return new int[] { TokenTypes.PACKAGE_DEF, TokenTypes.CLASS_DEF, TokenTypes.METHOD_DEF };
     }
 
     private String getFullIdentifier(DetailAST detailAST) {
         return switch (detailAST.getType()) {
             case TokenTypes.IDENT -> detailAST.getText();
-            case TokenTypes.DOT ->
-                    String.format("%s.%s", getFullIdentifier(detailAST.getFirstChild()), getFullIdentifier(detailAST.getLastChild()));
+            case TokenTypes.DOT -> String.format("%s.%s", getFullIdentifier(detailAST.getFirstChild()),
+                    getFullIdentifier(detailAST.getLastChild()));
             default -> "";
         };
     }

@@ -5,6 +5,6 @@
 
 <module name="Checker">
     <module name="TreeWalker">
-        <module name="fun.ninth.RestApiInventoryCheck"/>
+        <module name="fun.ninth.inventory.checkstyle.RestApiInventoryCheck"/>
     </module>
 </module>

@@ -1,4 +1,4 @@
-package fun.ninth;
+package fun.ninth.inventory.checkstyle;
 
 import java.util.Objects;
 
@@ -28,7 +28,7 @@ public class RestApiInventoryCheck extends AbstractCheck {
 
     @Override
     public int[] getDefaultTokens() {
-        return new int[]{TokenTypes.CLASS_DEF, TokenTypes.METHOD_DEF};
+        return new int[] { TokenTypes.CLASS_DEF, TokenTypes.METHOD_DEF };
     }
 
     @Override
@@ -73,8 +73,8 @@ public class RestApiInventoryCheck extends AbstractCheck {
     }
 
     private String getAnnotationSummary(DetailAST detailAST) {
-        for (DetailAST child = detailAST.findFirstToken(TokenTypes.ANNOTATION_MEMBER_VALUE_PAIR);
-             child != null; child = child.getNextSibling()) {
+        for (DetailAST child = detailAST.findFirstToken(
+                TokenTypes.ANNOTATION_MEMBER_VALUE_PAIR); child != null; child = child.getNextSibling()) {
             DetailAST identifier = child.findFirstToken(TokenTypes.IDENT);
             if (identifier == null) {
                 continue;
@@ -119,7 +119,7 @@ public class RestApiInventoryCheck extends AbstractCheck {
                 }
             }
         }
-        if (httpMethod != null && !endpoint.isEmpty()) {
+        if (httpMethod != null && endpoint.length() > 0) {
             System.out.printf("[DEBUG] [REST-API Inventory Check] %s %s %s \"%s\"%n", currentClass, httpMethod,
                     endpoint, summary);
         }
