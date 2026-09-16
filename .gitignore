@@ -4,3 +4,7 @@ venv/
 **__pycache__/
 bin/
 **target/
+dist/
+
+*.patch
+*.diff

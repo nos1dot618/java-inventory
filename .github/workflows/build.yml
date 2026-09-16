@@ -1,0 +1,84 @@
+name: Build
+
+on:
+  push:
+    branches:
+      - master
+      - main
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build (${{ matrix.name }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: linux-x86_64
+            os: ubuntu-24.04
+            executable: java-inventory
+
+          - name: windows-x86_64
+            os: windows-2025
+            executable: java-inventory.exe
+
+          - name: macos-x86_64
+            os: macos-13
+            executable: java-inventory
+
+          - name: macos-arm64
+            os: macos-14
+            executable: java-inventory
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      - name: Set up JDK
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "25"
+
+      - name: Set up Maven
+        uses: stCarolas/setup-maven@v5
+        with:
+          maven-version: "3.9.11"
+
+      - name: Build executable
+        run: python package.py
+
+      - name: Test help
+        shell: bash
+        run: ./dist/${{ matrix.executable }} --help
+
+      - name: Test setup
+        shell: bash
+        run: ./dist/${{ matrix.executable }} setup
+
+      - name: Test coverage
+        shell: bash
+        run: |
+          ./dist/${{ matrix.executable }} test-coverage \
+            dev-test/src/main \
+            dev-test/src/test
+          test -s test_coverage_report.html
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: java-inventory-${{ matrix.name }}
+          path: dist/${{ matrix.executable }}
+          if-no-files-found: error
+          retention-days: 14

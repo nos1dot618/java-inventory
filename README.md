@@ -326,6 +326,74 @@ python java_inventory.py test-coverage --help
 python java_inventory.py inventory-dependency --help
 ```
 
+## Packaging
+
+Build `java-inventory` as a standalone executable with PyInstaller:
+
+```sh
+python build.py
+```
+
+The build script:
+
+1. Creates a project-local `.venv` if it does not exist.
+2. Installs PyInstaller into the build environment if necessary.
+3. Runs `python java_inventory.py setup`.
+4. Verifies that the required Checkstyle and Maven build artifacts exist.
+5. Packages the application and its required resources into a standalone executable.
+
+The resulting executable is written to:
+
+```shell
+dist/java-inventory
+```
+
+On Windows, the executable is:
+
+```powershell
+dist\java-inventory.exe
+```
+
+Run the packaged executable with:
+
+```shell
+./dist/java-inventory --help
+```
+
+On Windows:
+
+```powershell
+dist\java-inventory.exe --help
+```
+
+### Packaging options
+
+Skip cleanup of previous PyInstaller build artifacts:
+
+```shell
+python build.py --no-cleanup
+```
+
+Use a different PyInstaller spec file:
+
+```shell
+python build.py --spec path/to/custom.spec
+```
+
+Enable debug output:
+
+```shell
+python build.py --debug
+```
+
+The build requires Python, JDK, and Maven. The `setup` step builds the Java components required by the packaged application.
+
+### Platform builds
+
+PyInstaller produces a native executable for the platform on which it runs. To produce binaries for multiple platforms, run the build on each target platform.
+
+For official releases, the project uses GitHub Actions to build platform-specific binaries and attach them to GitHub Releases.
+
 ## Checkstyle
 
 The linter uses the project's Checkstyle configuration and custom Checkstyle checks:

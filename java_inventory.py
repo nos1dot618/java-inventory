@@ -7,15 +7,23 @@
 import argparse
 import importlib.util
 import sys
+import textwrap
+import tomllib
 from pathlib import Path
 
-from common.inventory_common import error, require_command, run, set_debug
+from common.inventory_common import error, require_command, set_debug
 
 ROOT = Path(__file__).resolve().parent
 
 # Make the repository root importable so modules can share common utilities.
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
+
+
+def project_metadata() -> dict:
+    """Load project metadata from pyproject.toml."""
+    with (ROOT / "pyproject.toml").open("rb") as file:
+        return tomllib.load(file)["project"]
 
 
 def load_module(name: str, path: Path):
@@ -32,10 +40,39 @@ def load_module(name: str, path: Path):
     return module
 
 
-def subcommand_setup(_args, root: Path):
+def subcommand_setup(_args, _root: Path):
     require_command("git")
     require_command("mvn")
-    run(["git", "submodule", "update", "--init", "--recursive"], cwd=root)
+
+
+def subcommand_version(_args):
+    metadata = project_metadata()
+    print(f"{metadata['name']} {metadata['version']}")
+
+
+def subcommand_about(_args):
+    metadata = project_metadata()
+    name = metadata["name"]
+    version = metadata["version"]
+    description = metadata["description"]
+    authors = metadata.get("authors", [])
+    license_info = metadata.get("license", {})
+    urls = metadata.get("urls", {})
+
+    print(f"{name} {version}")
+    print()
+    print(textwrap.fill(description, width=80))
+    print()
+    if authors:
+        print(f"Author:       {authors[0]['name']}")
+    if license_info:
+        print(f"License:      {license_info}")
+    if "Repository" in urls:
+        print(f"Repository:   {urls['Repository']}")
+    if "Issues" in urls:
+        print(f"Issues:       {urls['Issues']}")
+    print()
+    print(f"Run '{name} --help' for help.")
 
 
 def build_parser():
@@ -62,10 +99,22 @@ def build_parser():
         help="set up all inventory components",
     )
 
+    info = subparsers.add_parser(
+        "about",
+        help="show tool information and available commands",
+    )
+
+    version = subparsers.add_parser(
+        "version",
+        help="show the tool version",
+    )
+
     checkstyle.register_commands(subparsers, ROOT, setup_handlers)
     maven.register_commands(subparsers, ROOT, setup_handlers)
 
     setup.set_defaults(setup_handlers=setup_handlers)
+    info.set_defaults(handler=subcommand_about)
+    version.set_defaults(handler=subcommand_version)
 
     return parser
 
@@ -80,6 +129,10 @@ def main() -> int:
         if args.command == "setup":
             for handler in args.setup_handlers:
                 handler(args)
+            return 0
+
+        if args.command == "info":
+            subcommand_about(args)
             return 0
 
         args.handler(args)
