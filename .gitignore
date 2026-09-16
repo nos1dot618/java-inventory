@@ -8,3 +8,4 @@ dist/
 
 *.patch
 *.diff
+test_coverage_report.html

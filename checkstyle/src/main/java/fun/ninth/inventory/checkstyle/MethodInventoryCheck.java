@@ -29,7 +29,9 @@ public class MethodInventoryCheck extends AbstractCheck {
             }
             case TokenTypes.METHOD_DEF: {
                 String method = Objects.requireNonNull(detailAST.findFirstToken(TokenTypes.IDENT)).getText();
-                System.out.printf("[DEBUG] [Method Inventory Check] %s %s %s%n", currentClass, currentPackage, method);
+                DetailAST modifiers = detailAST.findFirstToken(TokenTypes.MODIFIERS);
+                String accessModifier = getAccessModifier(modifiers);
+                System.out.printf("%s,%s,%s,%s%n", currentPackage, currentClass, method, accessModifier);
                 break;
             }
         }
@@ -48,6 +50,22 @@ public class MethodInventoryCheck extends AbstractCheck {
     @Override
     public int[] getDefaultTokens() {
         return new int[] { TokenTypes.PACKAGE_DEF, TokenTypes.CLASS_DEF, TokenTypes.METHOD_DEF };
+    }
+
+    private String getAccessModifier(DetailAST modifiers) {
+        if (modifiers == null) {
+            return "package-private";
+        }
+        if (modifiers.findFirstToken(TokenTypes.LITERAL_PUBLIC) != null) {
+            return "public";
+        }
+        if (modifiers.findFirstToken(TokenTypes.LITERAL_PROTECTED) != null) {
+            return "protected";
+        }
+        if (modifiers.findFirstToken(TokenTypes.LITERAL_PRIVATE) != null) {
+            return "private";
+        }
+        return "package-private";
     }
 
     private String getFullIdentifier(DetailAST detailAST) {

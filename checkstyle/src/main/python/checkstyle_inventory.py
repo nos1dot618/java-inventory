@@ -1,10 +1,11 @@
 """Checkstyle-based Java inventory commands."""
 
-# pylint: disable=missing-function-docstring
+# pylint: disable=missing-function-docstring, too-many-lines
 
 import csv
 import re
 from collections import defaultdict
+from html import escape
 from pathlib import Path
 
 from common.inventory_common import (
@@ -96,8 +97,10 @@ def generate_rest_api_report(source_dir: Path, output_file: Path):
 
 
 METHOD_RE = re.compile(
-    r"\[DEBUG]\s+\[Method Inventory Check]\s+"
-    r"([A-Za-z0-9_]+)\s+([A-Za-z0-9_$.]+)\s+([A-Za-z0-9_]+)"
+    r"([A-Za-z0-9_$.]+),"
+    r"([A-Za-z0-9_]+),"
+    r"([A-Za-z0-9_]+),"
+    r"(public|protected|private|package-private)"
 )
 MISSING_CLASS_KEY = "missingClass"
 MISSING_METHODS_KEY = "missingMethods"
@@ -108,65 +111,596 @@ def collect_methods(output: str):
     for line in output.splitlines():
         match = METHOD_RE.search(line)
         if match:
-            class_name, class_path, method_name = match.groups()
-            result[(class_path, class_name)].add(method_name)
+            class_path, class_name, method_name, access_modifier = match.groups()
+            result[(class_path, class_name)].add((method_name, access_modifier))
     return result
 
 
-def generate_html_report(missing_tests: dict, source_methods: dict, output_file: Path):
-    html = f"""<!DOCTYPE html>
-<html lang="en"><head><meta charset="UTF-8"><title>Test-Coverage Report</title>
-<style>
-body {{ font-family: Arial, sans-serif; font-size: 14px; margin: 20px; background-color: #f9f9f9; }}
-h1 {{ font-size: 20px; }} table {{ border-collapse: collapse; width: 100%; }}
-th, td {{ border: 1px solid #ccc; padding: 6px 10px; text-align: left; }} th {{ background-color: #eee; }}
-tr.failed {{ background-color: #f8d7da; cursor: pointer; }} tr.passed {{ background-color: #d4edda; cursor: pointer; }}
-tr.details {{ display: none; background-color: #fff3cd; }}
-</style>
-<script>function toggleRow(id) {{ var row=document.getElementById(id); row.style.display=(row.style.display==='table-row')?'none':'table-row'; }}</script>
-</head><body><h1>Test-Coverage Report</h1>
-<p>Total classes analyzed: {len(source_methods)}</p><table>
-<tr><th>Class</th><th>Classpath</th><th>Missing Methods</th></tr>"""
+# pylint: disable=too-many-locals, line-too-long
+def generate_html_report(
+    coverage: list[dict],
+    stats: dict,
+    output_file: Path,
+):
+    def pct(value: int, total: int) -> str:
+        return f"{(value / total * 100):.1f}%" if total else "100.0%"
 
-    sorted_classes = sorted(
-        source_methods.keys(),
-        key=lambda key: (key not in missing_tests, key[0], key[1]),
-    )
-    for index, (class_path, class_name) in enumerate(sorted_classes):
-        entry = missing_tests.get(
-            (class_path, class_name),
-            {MISSING_CLASS_KEY: False, MISSING_METHODS_KEY: []},
-        )
-        missing = entry[MISSING_METHODS_KEY]
-        row_class = "failed" if missing else "passed"
+    def status_class(status: str) -> str:
+        return {
+            "covered": "status-covered",
+            "partial": "status-partial",
+            "missing": "status-missing",
+        }[status]
+
+    rows = []
+    for index, entry in enumerate(coverage):
+        status = entry["status"]
+        missing = entry["missing"]
+        covered = entry["covered"]
+        required = entry["required"]
+        optional = entry["optional"]
         details_id = f"details_{index}"
-        html += f"""
-<tr class="{row_class}" onclick="toggleRow('{details_id}')"><td>{class_name}</td>
-<td>{class_path}.{class_name}</td><td>{len(missing)}</td></tr>
-<tr id="{details_id}" class="details"><td colspan="3">"""
-        if missing:
-            html += "<b>Unit-Test-Methods missing in the Test-Class:</b><ul>"
-            html += "".join(f"<li>{method}</li>" for method in missing)
-            html += "</ul>"
-        else:
-            html += "<b>No unit-test-methods missing in the Test-Class.</b><br>"
-        html += "<b>Methods present in Original-Class:</b><ul>"
-        html += "".join(
-            f"<li>{method}</li>"
-            for method in sorted(source_methods[(class_path, class_name)])
-        )
-        html += "</ul></td></tr>"
 
-    html += "</table></body></html>"
+        method_rows = []
+        for method_name, access_modifier, test_names in entry["methods"]:
+            if access_modifier == "private":
+                state = '<span class="method-state optional">Optional</span>'
+            elif test_names:
+                tests = ", ".join(test_names)
+                state = f'<span class="method-state covered">✓ {escape(tests)}</span>'
+            else:
+                state = '<span class="method-state missing">Missing</span>'
+
+            method_rows.append(
+                f"""
+                <div class="method-row">
+                    <div class="method-name">{escape(method_name)}</div>
+                    <div class="visibility">{access_modifier}</div>
+                    <div>{state}</div>
+                </div>"""
+            )
+
+        missing_text = (
+            f'<span class="count-missing">{len(missing)}</span> missing'
+            if missing
+            else '<span class="count-covered">All required methods covered</span>'
+        )
+
+        rows.append(
+            f"""
+            <section class="class-card">
+                <button class="class-header" type="button"
+                        onclick="toggleRow('{details_id}')"
+                        aria-controls="{details_id}" aria-expanded="false">
+                    <span class="class-info">
+                        <span class="class-name">{escape(entry["class_name"])}</span>
+                        <span class="package">{escape(entry["class_path"])}</span>
+                    </span>
+                    <span class="class-summary">
+                        <span>{covered}/{required} required</span>
+                        <span class="status {status_class(status)}">{status.title()}</span>
+                        <span class="chevron" id="{details_id}_icon">⌄</span>
+                    </span>
+                </button>
+                <div id="{details_id}" class="class-details">
+                    <div class="detail-summary">
+                        <span>{missing_text}</span>
+                        <span>{optional} private method{"s" if optional != 1 else ""} optional</span>
+                    </div>
+                    <div class="method-list">
+                        <div class="method-row method-heading">
+                            <div>Method</div>
+                            <div>Access</div>
+                            <div>Test</div>
+                        </div>
+                        {"".join(method_rows)}
+                    </div>
+                </div>
+            </section>"""
+        )
+
+    visibility_rows = []
+    for visibility in ("public", "protected", "package-private", "private"):
+        data = stats["visibility"][visibility]
+        coverage_text = (
+            "optional"
+            if visibility == "private"
+            else f"{data['covered']}/{data['required']} · {pct(data['covered'], data['required'])}"
+        )
+        visibility_rows.append(
+            f"""
+            <div class="breakdown-row">
+                <span>
+                    <span class="dot dot-{visibility.replace("-", "")}"></span>
+                    {visibility}
+                </span>
+                <span>{data["total"]} methods</span>
+                <strong>{coverage_text}</strong>
+            </div>"""
+        )
+
+    html = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Test Coverage</title>
+<style>
+:root {{
+    --bg: #f6f8fb;
+    --surface: #ffffff;
+    --border: #e5e9f0;
+    --text: #172033;
+    --muted: #687386;
+    --accent: #4f46e5;
+    --accent-soft: #eef2ff;
+    --green: #16803c;
+    --green-soft: #eaf7ef;
+    --amber: #a16207;
+    --amber-soft: #fff7df;
+    --red: #c0392b;
+    --red-soft: #fff0ee;
+    --shadow: 0 1px 3px rgba(15, 23, 42, .06), 0 8px 24px rgba(15, 23, 42, .04);
+}}
+
+* {{ box-sizing: border-box; }}
+
+body {{
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+    font-size: 14px;
+    line-height: 1.45;
+}}
+
+.container {{
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 36px 24px 56px;
+}}
+
+.header {{
+    margin-bottom: 24px;
+}}
+
+.eyebrow {{
+    color: var(--accent);
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    margin-bottom: 5px;
+}}
+
+h1 {{
+    margin: 0;
+    font-size: 28px;
+    letter-spacing: -.025em;
+}}
+
+.subtitle {{
+    margin: 5px 0 0;
+    color: var(--muted);
+}}
+
+.cards {{
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    margin-bottom: 24px;
+}}
+
+.card {{
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 17px 18px;
+    box-shadow: var(--shadow);
+}}
+
+.card-label {{
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+}}
+
+.card-value {{
+    margin-top: 5px;
+    font-size: 25px;
+    font-weight: 700;
+    letter-spacing: -.02em;
+}}
+
+.card-subtitle {{
+    margin-top: 2px;
+    color: var(--muted);
+    font-size: 12px;
+}}
+
+.card.coverage .card-value {{ color: var(--accent); }}
+.card.missing .card-value {{ color: var(--red); }}
+.card.covered .card-value {{ color: var(--green); }}
+
+.section {{
+    margin-top: 24px;
+}}
+
+.section-title {{
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin-bottom: 10px;
+}}
+
+.section-title h2 {{
+    margin: 0;
+    font-size: 16px;
+}}
+
+.section-title span {{
+    color: var(--muted);
+    font-size: 12px;
+}}
+
+.breakdown {{
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+    box-shadow: var(--shadow);
+}}
+
+.breakdown-row {{
+    display: grid;
+    grid-template-columns: 1fr 140px 190px;
+    align-items: center;
+    min-height: 48px;
+    padding: 0 17px;
+    border-bottom: 1px solid var(--border);
+}}
+
+.breakdown-row:last-child {{ border-bottom: 0; }}
+
+.breakdown-row > span:nth-child(2) {{
+    color: var(--muted);
+    text-align: right;
+}}
+
+.breakdown-row strong {{
+    text-align: right;
+    font-size: 13px;
+}}
+
+.dot {{
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    margin-right: 8px;
+    background: var(--accent);
+}}
+
+.dot-public {{ background: #4f46e5; }}
+.dot-protected {{ background: #0f766e; }}
+.dot-packageprivate {{ background: #b7791f; }}
+.dot-private {{ background: #94a3b8; }}
+
+.class-list {{
+    display: grid;
+    gap: 8px;
+}}
+
+.class-card {{
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+    box-shadow: var(--shadow);
+}}
+
+.class-header {{
+    width: 100%;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+    padding: 14px 16px;
+    text-align: left;
+}}
+
+.class-header:hover {{
+    background: #fafbff;
+}}
+
+.class-info {{
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+}}
+
+.class-name {{
+    font-weight: 650;
+}}
+
+.package {{
+    color: var(--muted);
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 12px;
+    margin-top: 2px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}}
+
+.class-summary {{
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    color: var(--muted);
+    white-space: nowrap;
+    font-size: 12px;
+}}
+
+.status {{
+    border-radius: 999px;
+    padding: 3px 8px;
+    font-weight: 650;
+}}
+
+.status-covered {{
+    background: var(--green-soft);
+    color: var(--green);
+}}
+
+.status-partial {{
+    background: var(--amber-soft);
+    color: var(--amber);
+}}
+
+.status-missing {{
+    background: var(--red-soft);
+    color: var(--red);
+}}
+
+.chevron {{
+    color: #98a2b3;
+    font-size: 17px;
+    width: 14px;
+    transition: transform .15s ease;
+}}
+
+.class-details {{
+    display: none;
+    border-top: 1px solid var(--border);
+    background: #fbfcfe;
+    padding: 14px 16px 16px;
+}}
+
+.detail-summary {{
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    color: var(--muted);
+    font-size: 12px;
+    margin-bottom: 12px;
+}}
+
+.count-missing {{ color: var(--red); font-weight: 650; }}
+.count-covered {{ color: var(--green); font-weight: 650; }}
+
+.method-list {{
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    background: var(--surface);
+}}
+
+.method-row {{
+    display: grid;
+    grid-template-columns: 1fr 130px 1.5fr;
+    align-items: center;
+    gap: 12px;
+    min-height: 40px;
+    padding: 0 12px;
+    border-bottom: 1px solid var(--border);
+}}
+
+.method-row:last-child {{ border-bottom: 0; }}
+
+.method-heading {{
+    min-height: 34px;
+    background: #f7f8fb;
+    color: var(--muted);
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+}}
+
+.method-name {{
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}}
+
+.visibility {{
+    color: var(--muted);
+    font-size: 12px;
+}}
+
+.method-state {{
+    font-size: 12px;
+}}
+
+.method-state.covered {{ color: var(--green); }}
+.method-state.missing {{ color: var(--red); font-weight: 650; }}
+.method-state.optional {{ color: var(--muted); font-style: italic; }}
+
+
+.footer {{
+    margin - top: 32px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border);
+    color: var(--muted);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    font-size: 12px;
+    text-align: center;
+}}
+
+.footer a {{
+    color: var(--muted);
+    text-decoration: none;
+}}
+
+.footer a:hover {{
+    color: var(--accent);
+    text-decoration: underline;
+}}
+
+.footer-separator {{
+    color: #c2c8d2;
+}}
+
+@media (max-width: 760px) {{
+    .container {{ padding: 24px 14px 40px; }}
+    .cards {{ grid-template-columns: repeat(2, 1fr); }}
+    .breakdown-row {{ grid-template-columns: 1fr 90px 130px; }}
+    .method-row {{ grid-template-columns: 1fr 100px; }}
+    .method-row > :last-child {{ grid-column: 1 / -1; padding-bottom: 8px; }}
+    .method-heading > :last-child {{ display: none; }}
+    .class-summary > span:first-child {{ display: none; }}
+}}
+
+@media (max-width: 480px) {{
+    .cards {{ grid-template-columns: 1fr 1fr; gap: 8px; }}
+    .card {{ padding: 14px; }}
+    .card-value {{ font-size: 21px; }}
+    .class-header {{ padding: 12px; }}
+    .class-summary {{ gap: 6px; }}
+    .breakdown-row {{ grid-template-columns: 1fr auto; gap: 8px; padding: 8px 12px; }}
+    .breakdown-row > span:nth-child(2) {{ display: none; }}
+    .breakdown-row strong {{ text-align: right; }}
+}}
+</style>
+<script>
+function toggleRow(id) {{
+    const row = document.getElementById(id);
+    const button = row.previousElementSibling;
+    const icon = document.getElementById(id + "_icon");
+    const open = row.style.display === "block";
+    row.style.display = open ? "none" : "block";
+    button.setAttribute("aria-expanded", String(!open));
+    icon.style.transform = open ? "rotate(0deg)" : "rotate(180deg)";
+}}
+</script>
+</head>
+<body>
+<main class="container">
+    <header class="header">
+        <div class="eyebrow">Java Inventory</div>
+        <h1>Test Coverage</h1>
+        <p class="subtitle">Method-level test coverage across {
+        stats["classes_total"]
+    } analyzed classes.</p>
+    </header>
+
+    <section class="cards">
+        <div class="card">
+            <div class="card-label">Classes</div>
+            <div class="card-value">{stats["classes_total"]}</div>
+            <div class="card-subtitle">{stats["classes_covered"]} fully covered</div>
+        </div>
+        <div class="card covered">
+            <div class="card-label">Tested</div>
+            <div class="card-value">{stats["methods_covered"]}</div>
+            <div class="card-subtitle">of {
+        stats["methods_required"]
+    } required methods</div>
+        </div>
+        <div class="card missing">
+            <div class="card-label">Missing</div>
+            <div class="card-value">{stats["methods_missing"]}</div>
+            <div class="card-subtitle">required tests</div>
+        </div>
+        <div class="card coverage">
+            <div class="card-label">Coverage</div>
+            <div class="card-value">{
+        pct(stats["methods_covered"], stats["methods_required"])
+    }</div>
+            <div class="card-subtitle">{
+        stats["private_methods"]
+    } private methods optional</div>
+        </div>
+    </section>
+
+    <section class="section">
+        <div class="section-title">
+            <h2>Breakdown by access</h2>
+            <span>Private methods are optional</span>
+        </div>
+        <div class="breakdown">
+            {"".join(visibility_rows)}
+        </div>
+    </section>
+
+    <section class="section">
+        <div class="section-title">
+            <h2>Classes</h2>
+            <span>{stats["classes_missing"]} with missing tests</span>
+        </div>
+        <div class="class-list">
+            {"".join(rows)}
+        </div>
+    </section>
+
+    <footer class="footer">
+        <span>© 2026 Lakshay Chauhan</span>
+        <span class="footer-separator">·</span>
+        <span>MIT License</span>
+        <span class="footer-separator">·</span>
+        <a href="https://github.com/nos1dot618/java-inventory"
+           target="_blank" rel="noopener noreferrer">github.com/nos1dot618/java-inventory</a>
+    </footer>
+
+</main>
+</body>
+</html>"""
+
     output_file.parent.mkdir(parents=True, exist_ok=True)
     output_file.write_text(html, encoding="utf-8")
     success(f"HTML report generated '{output_file}'")
 
 
+# pylint: disable=too-many-locals, too-many-branches
 def generate_test_coverage_report(source_dir: Path, test_dir: Path, output_file: Path):
     source_methods = collect_methods(run_checkstyle(METHOD_CONFIG, source_dir))
     test_methods = collect_methods(run_checkstyle(METHOD_CONFIG, test_dir))
-    missing_tests = {}
+
+    coverage = []
+    stats = {
+        "classes_total": len(source_methods),
+        "classes_covered": 0,
+        "classes_missing": 0,
+        "methods_total": 0,
+        "methods_required": 0,
+        "methods_covered": 0,
+        "methods_missing": 0,
+        "private_methods": 0,
+        "visibility": {
+            "public": {"total": 0, "required": 0, "covered": 0},
+            "protected": {"total": 0, "required": 0, "covered": 0},
+            "package-private": {"total": 0, "required": 0, "covered": 0},
+            "private": {"total": 0, "required": 0, "covered": 0},
+        },
+    }
 
     for (class_path, class_name), methods in source_methods.items():
         test_keys = [
@@ -182,35 +716,87 @@ def generate_test_coverage_report(source_dir: Path, test_dir: Path, output_file:
                 found_test_class = True
                 available_test_methods.update(test_methods[test_key])
 
-        if not found_test_class:
-            missing_tests[(class_path, class_name)] = {
-                MISSING_CLASS_KEY: True,
-                MISSING_METHODS_KEY: sorted(methods),
-            }
-            continue
-        expected = {f"test{method[0].upper()}{method[1:]}" for method in methods}
-        actual = {
-            expected_method
-            for expected_method in expected
-            if any(
-                test_method.startswith(expected_method)
-                for test_method in available_test_methods
-            )
-        }
-        missing = sorted(expected - actual)
-        if missing:
-            missing_tests[(class_path, class_name)] = {
-                MISSING_CLASS_KEY: False,
-                MISSING_METHODS_KEY: missing,
-            }
+        method_details = []
+        missing = []
+        covered_count = 0
+        required_count = 0
+        optional_count = 0
 
-    if not missing_tests:
+        for method_name, access_modifier in sorted(methods):
+            stats["methods_total"] += 1
+            stats["visibility"][access_modifier]["total"] += 1
+
+            if access_modifier == "private":
+                optional_count += 1
+                stats["private_methods"] += 1
+                method_details.append((method_name, access_modifier, []))
+                continue
+
+            required_count += 1
+            stats["methods_required"] += 1
+            stats["visibility"][access_modifier]["required"] += 1
+
+            expected_method = f"test{method_name[0].upper()}{method_name[1:]}"
+            matching_tests = sorted(
+                test_method
+                for test_method, _ in available_test_methods
+                if test_method.startswith(expected_method)
+            )
+
+            if matching_tests:
+                covered_count += 1
+                stats["methods_covered"] += 1
+                stats["visibility"][access_modifier]["covered"] += 1
+            else:
+                missing.append(method_name)
+                stats["methods_missing"] += 1
+
+            method_details.append((method_name, access_modifier, matching_tests))
+
+        status = (
+            "covered"
+            if required_count == covered_count
+            else "missing"
+            if covered_count == 0
+            else "partial"
+        )
+
+        if status == "covered":
+            stats["classes_covered"] += 1
+        else:
+            stats["classes_missing"] += 1
+
+        coverage.append(
+            {
+                "class_path": class_path,
+                "class_name": class_name,
+                "status": status,
+                "required": required_count,
+                "covered": covered_count,
+                "missing": missing,
+                "optional": optional_count,
+                "has_test_class": found_test_class,
+                "methods": method_details,
+            }
+        )
+
+    coverage.sort(
+        key=lambda entry: (
+            entry["status"] == "covered",
+            entry["class_path"],
+            entry["class_name"],
+        )
+    )
+
+    if stats["methods_missing"] == 0:
         success("no unit tests missing in any of the classes")
     else:
         warning("missing unit tests:")
-        for class_path, class_name in missing_tests:
-            info(f"- {class_name}")
-    generate_html_report(missing_tests, source_methods, output_file)
+        for entry in coverage:
+            if entry["missing"]:
+                info(f"- {entry['class_name']}")
+
+    generate_html_report(coverage, stats, output_file)
 
 
 def run_git(*args: str, cwd: Path) -> str:

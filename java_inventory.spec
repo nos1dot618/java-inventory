@@ -42,6 +42,7 @@ a = Analysis(
     datas=datas,
     hiddenimports=[
         "json",
+        "html",
     ],
     hookspath=[],
     hooksconfig={},
