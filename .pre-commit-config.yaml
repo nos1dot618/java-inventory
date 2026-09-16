@@ -4,3 +4,12 @@ repos:
     hooks:
       - id: trailing-whitespace
       - id: end-of-file-fixer
+
+  - repo: local
+    hooks:
+      - id: build-and-test-package
+        name: Build and test package
+        entry: python scripts/pre_push_hook.py
+        language: python
+        pass_filenames: false
+        stages: [pre-push]

@@ -8,6 +8,13 @@ Install the required tools listed in the [README](README.md#requirements), then 
 
 ```shell
 python java_inventory.py setup
+````
+
+Install `pre-commit` for the development hooks:
+
+```shell
+pip install pre-commit
+pre-commit install
 ```
 
 Use the CLI directly while developing:
