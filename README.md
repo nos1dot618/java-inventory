@@ -2,18 +2,34 @@
 
 Development tooling for Java projects, including Checkstyle linting, Java method and REST API inventories, test-coverage analysis, and Maven dependency inventory.
 
+<!-- markdownlint-disable MD001 -->
+### Contents
+
+- [Requirements](#requirements)
+- [Setup](#setup)
+- [Changed-Line Java Linter](#1-changed-line-java-linter)
+- [Using `pre-commit`](#2-using-pre-commit)
+- [Java Method Inventory](#3-java-method-inventory)
+- [REST API Inventory](#4-rest-api-inventory)
+- [Test Coverage Analysis](#5-test-coverage-analysis)
+- [Maven Dependency Inventory](#6-maven-dependency-inventory)
+- [Command Reference](#command-reference)
+- [Checkstyle](#checkstyle)
+- [Development & Contribution](CONTRIBUTING.md)
+- [Packaging](PACKAGING.md)
+
 ## Requirements
 
-* Python 3
-* Git
-* JDK (`java`, `javac`, and `jar`)
-* Maven (`mvn`)
+- Python 3
+- Git
+- JDK (`java`, `javac`, and `jar`)
+- Maven (`mvn`)
 
 ## Setup
 
 Initialize the project dependencies and build the inventory components:
 
-```sh
+```shell
 python java_inventory.py setup
 ```
 
@@ -31,31 +47,31 @@ For modified files, only violations on changed lines are reported. Newly added f
 
 Check unstaged working-tree changes:
 
-```sh
+```shell
 python java_inventory.py lint .
 ```
 
 Check staged changes:
 
-```sh
+```shell
 python java_inventory.py lint . --cached
 ```
 
 Include untracked Java files:
 
-```sh
+```shell
 python java_inventory.py lint . --include-untracked
 ```
 
 Show the changed Java files and lines without running Checkstyle:
 
-```sh
+```shell
 python java_inventory.py lint . --no-checkstyle
 ```
 
 Enable debug logging:
 
-```sh
+```shell
 python java_inventory.py --debug lint .
 ```
 
@@ -89,7 +105,7 @@ info: checkstyle summary: 1 error(s), 2 warning(s).
 
 `--debug` is a global option and must appear **before** the subcommand:
 
-```sh
+```shell
 python java_inventory.py --debug lint .
 ```
 
@@ -99,14 +115,15 @@ For a normal Git hook, lint the staged snapshot.
 
 Create `.git/hooks/pre-commit`:
 
-```sh
+```shell
 #!/bin/sh
+
 python java_inventory.py lint . --cached
 ```
 
 Make it executable:
 
-```sh
+```shell
 chmod +x .git/hooks/pre-commit
 ```
 
@@ -114,7 +131,7 @@ The `--cached` flag is important because a commit contains the staged version of
 
 To bypass the hook for a commit:
 
-```sh
+```shell
 git commit --no-verify
 ```
 
@@ -126,7 +143,7 @@ The same `lint` command can be integrated with the Python [`pre-commit`](https:/
 
 Install `pre-commit`:
 
-```sh
+```shell
 python -m pip install pre-commit
 ```
 
@@ -146,25 +163,25 @@ repos:
 
 Install the Git hook:
 
-```sh
+```shell
 pre-commit install
 ```
 
 Or install the hook and its environments:
 
-```sh
+```shell
 pre-commit install --install-hooks
 ```
 
 Run the lint hook manually:
 
-```sh
+```shell
 pre-commit run java-inventory-lint
 ```
 
 Run it against all files known to `pre-commit`:
 
-```sh
+```shell
 pre-commit run java-inventory-lint --all-files
 ```
 
@@ -176,13 +193,13 @@ The hook uses `pass_filenames: false` because `java_inventory.py` determines the
 
 Generate an inventory of Java methods:
 
-```sh
+```shell
 python java_inventory.py inventory-method dev-test/src/main
 ```
 
 Write the inventory to a specific file:
 
-```sh
+```shell
 python java_inventory.py inventory-method dev-test/src/main \
     --output build/methods.csv
 ```
@@ -193,19 +210,19 @@ python java_inventory.py inventory-method dev-test/src/main \
 
 Generate a CSV inventory of REST APIs:
 
-```sh
+```shell
 python java_inventory.py inventory-rest-api dev-test/src/main
 ```
 
 By default, the report is written to:
 
 ```text
-build/rest_apis.csv
+rest_apis.csv
 ```
 
 Specify a different output file:
 
-```sh
+```shell
 python java_inventory.py inventory-rest-api dev-test/src/main \
     --output build/rest_apis.csv
 ```
@@ -216,7 +233,7 @@ python java_inventory.py inventory-rest-api dev-test/src/main \
 
 Generate the test-coverage report:
 
-```sh
+```shell
 python java_inventory.py test-coverage \
     dev-test/src/main \
     dev-test/src/test
@@ -225,16 +242,16 @@ python java_inventory.py test-coverage \
 By default, the report is written to:
 
 ```text
-build/test_coverage_report.html
+test_coverage_report.html
 ```
 
 Specify a different output file:
 
-```sh
+```shell
 python java_inventory.py test-coverage \
     dev-test/src/main \
     dev-test/src/test \
-    --output build/coverage.html
+    --output build/test_coverage_report.html
 ```
 
 ---
@@ -243,34 +260,34 @@ python java_inventory.py test-coverage \
 
 Generate an inventory of Maven dependencies:
 
-```sh
-python java_inventory.py inventory-dependency path/to/project
+```shell
+python java_inventory.py inventory path/to/project
 ```
 
 The inventory includes:
 
-* Module
-* Group ID
-* Artifact ID
-* Declared version
-* Resolved version
-* Scope
-* Direct/transitive dependency
-* Optional dependency
+- Module
+- Group ID
+- Artifact ID
+- Declared version
+- Resolved version
+- Scope
+- Direct/transitive dependency
+- Optional dependency
 
 By default, dependency information is printed to the terminal.
 
 Write a CSV report:
 
-```sh
-python java_inventory.py inventory-dependency path/to/project \
+```shell
+python java_inventory.py inventory path/to/project \
     --output build/dependencies.csv
 ```
 
 Write a JSON report:
 
-```sh
-python java_inventory.py inventory-dependency path/to/project \
+```shell
+python java_inventory.py inventory path/to/project \
     --output build/dependencies.json \
     --format json
 ```
@@ -296,103 +313,35 @@ python java_inventory.py [--debug] <command>
 | `inventory-method` | Generate a Java method inventory |
 | `inventory-rest-api` | Generate a REST API inventory CSV |
 | `test-coverage` | Generate the test-coverage report |
-| `inventory-dependency` | Generate a Maven dependency inventory |
+| `inventory` | Generate a Maven dependency inventory |
 
 Show command help:
 
-```sh
+```shell
 python java_inventory.py --help
 ```
 
 Show help for a specific command:
 
-```sh
+```shell
 python java_inventory.py lint --help
 ```
 
-```sh
+```shell
 python java_inventory.py inventory-method --help
 ```
 
-```sh
+```shell
 python java_inventory.py inventory-rest-api --help
 ```
 
-```sh
+```shell
 python java_inventory.py test-coverage --help
 ```
 
-```sh
-python java_inventory.py inventory-dependency --help
-```
-
-## Packaging
-
-Build `java-inventory` as a standalone executable with PyInstaller:
-
-```sh
-python build.py
-```
-
-The build script:
-
-1. Creates a project-local `.venv` if it does not exist.
-2. Installs PyInstaller into the build environment if necessary.
-3. Runs `python java_inventory.py setup`.
-4. Verifies that the required Checkstyle and Maven build artifacts exist.
-5. Packages the application and its required resources into a standalone executable.
-
-The resulting executable is written to:
-
 ```shell
-dist/java-inventory
+python java_inventory.py inventory --help
 ```
-
-On Windows, the executable is:
-
-```powershell
-dist\java-inventory.exe
-```
-
-Run the packaged executable with:
-
-```shell
-./dist/java-inventory --help
-```
-
-On Windows:
-
-```powershell
-dist\java-inventory.exe --help
-```
-
-### Packaging options
-
-Skip cleanup of previous PyInstaller build artifacts:
-
-```shell
-python build.py --no-cleanup
-```
-
-Use a different PyInstaller spec file:
-
-```shell
-python build.py --spec path/to/custom.spec
-```
-
-Enable debug output:
-
-```shell
-python build.py --debug
-```
-
-The build requires Python, JDK, and Maven. The `setup` step builds the Java components required by the packaged application.
-
-### Platform builds
-
-PyInstaller produces a native executable for the platform on which it runs. To produce binaries for multiple platforms, run the build on each target platform.
-
-For official releases, the project uses GitHub Actions to build platform-specific binaries and attach them to GitHub Releases.
 
 ## Checkstyle
 
@@ -405,3 +354,11 @@ checkstyle/target/checkstyle-inventory-0.1.0-SNAPSHOT.jar
 ```
 
 Run `setup` first if the Checkstyle or Maven inventory components have not been built.
+
+## Development & Contribution
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for development workflow and contribution guidelines.
+
+## Packaging
+
+See [PACKAGING.md](PACKAGING.md) for standalone builds, platform packaging, and release details
