@@ -406,7 +406,7 @@ def register_commands(subparsers, root: Path, setup_handlers):
         "-o",
         "--output",
         type=Path,
-        default=root / "build" / "rest_apis.csv",
+        default="rest_apis.csv",
         help="output CSV file",
     )
     parser.set_defaults(
@@ -424,7 +424,7 @@ def register_commands(subparsers, root: Path, setup_handlers):
         "-o",
         "--output",
         type=Path,
-        default=root / "build" / "test_coverage_report.html",
+        default="test_coverage_report.html",
         help="output HTML report",
     )
     parser.set_defaults(

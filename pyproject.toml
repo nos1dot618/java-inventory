@@ -1,0 +1,15 @@
+[project]
+name = "java-inventory"
+version = "0.1.0"
+description = "Developer toolkit for Java projects with test coverage analysis, REST API inventory, and changed-line Checkstyle linting."
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT"
+license-files = ["LICENSE"]
+
+authors = [{ name = "Lakshay Chauhan" }]
+
+[project.urls]
+Homepage = "https://github.com/nos1dot618/java-inventory"
+Repository = "https://github.com/nos1dot618/java-inventory"
+Issues = "https://github.com/nos1dot618/java-inventory/issues"

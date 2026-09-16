@@ -116,7 +116,7 @@ def run(
     info(f"running: {formatted}")
     try:
         result = subprocess.run(
-            command,
+            resolve_command(command),
             cwd=cwd,
             check=False,
             text=True,
@@ -135,6 +135,32 @@ def run(
 def require_command(command: str):
     if shutil.which(command) is None:
         raise CommandNotFoundError(f"required command not found: {command}")
+
+
+def resolve_command(command: list[str], cwd: Path | None = None) -> list[str]:
+    """Resolve an executable while supporting commands and explicit paths."""
+    if not command:
+        raise ValueError("command cannot be empty")
+
+    executable = command[0]
+    executable_path = Path(executable)
+
+    if executable_path.parent != Path("."):
+        if executable_path.is_file():
+            return [str(executable_path), *command[1:]]
+
+        if cwd is not None:
+            cwd_executable = cwd / executable_path
+            if cwd_executable.is_file():
+                return [str(cwd_executable), *command[1:]]
+
+        raise CommandNotFoundError(f"command not found: {executable}")
+
+    resolved = shutil.which(executable)
+    if resolved is None:
+        raise CommandNotFoundError(f"command not found: {executable}")
+
+    return [resolved, *command[1:]]
 
 
 def require_file(path: Path, description: str):
